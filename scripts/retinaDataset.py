@@ -5,12 +5,25 @@ from torch.utils.data import Dataset
 import os
 
 class RetinaDataset(Dataset):
-  def __init__(self, image_path, csv_path, transform=None):
+  def __init__(self, image_path, csv_path, transform=None, drop_skip=False):
     self.df = pd.read_csv(csv_path)
     self.image_path = image_path
     self.transform = transform
 
     self.df['sex_binary'] = self.df['sex'].map({'F': 0, 'M': 1})
+    bins = [0,45,55,65,75,82,150] #po analizie wizualnej histogramu
+    labels = ["skip", "45-54", "55-64", "65-74", "75-82", ">82"]
+    self.df["age_bin"] = pd.cut(
+            self.df["age"], bins=bins, labels=labels, right=False
+        )
+
+    if drop_skip:
+      self.df = self.df[self.df["age_bin"] != "skip"].reset_index(
+                drop=True
+            )
+    self.df["age_bin_encoded"] = (
+            self.df["age_bin"].cat.remove_unused_categories().cat.codes
+        )
 
   def __len__(self):
     return len(self.df)
@@ -35,12 +48,12 @@ class RetinaDataset(Dataset):
 
     img = io.imread(img_name)
     gender = self.df.iloc[idx]['sex_binary']
-    age = self.df.iloc[idx]['age']
+    age_bin = self.df.iloc[idx]['age_bin_encoded']
 
     if self.transform:
       img = self.transform(img)
 
-    sample = {'image': img, 'gender': gender, 'age': age}
+    sample = {'image': img, 'gender': gender, 'age_bin': age_bin}
 
     return sample
 
